@@ -1,4 +1,4 @@
-name: Construir y publicar imagen Docker
+name: Construir, publicar y desplegar imagen Docker
 
 on:
   push:
@@ -11,7 +11,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-push:
+  build-push-deploy:
     runs-on: ubuntu-latest
 
     permissions:
@@ -39,3 +39,27 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Desplegar automáticamente en EC2
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            set -e
+
+            sudo docker pull ghcr.io/princhuaker/pedidos360-api:latest
+
+            sudo docker rm -f pedidos360-container || true
+
+            sudo docker run -d \
+              --name pedidos360-container \
+              --restart unless-stopped \
+              -p 8080:8080 \
+              ghcr.io/princhuaker/pedidos360-api:latest
+
+            sleep 10
+
+            curl --fail http://localhost:8080/api/pedidos/prueba
